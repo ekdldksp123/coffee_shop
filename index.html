@@ -1,0 +1,312 @@
+<html>
+
+<head>
+    <title>커피캣 스토어</title>
+    <meta charset="UTF-8" />
+    <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" /> -->
+    <link rel="stylesheet" href="./styles.css">
+    <script>
+        const PRODUCT_LIST = 'https://uikt6pohhh.execute-api.ap-northeast-2.amazonaws.com/dev/products';
+        const PRODUCT_DETAIL = 'https://uikt6pohhh.execute-api.ap-northeast-2.amazonaws.com/dev/products/';
+        const URL = window.location.href ? window.location.href : './';
+        const request = async (url) => {
+            try {
+                return await fetch(url).then((res) => {
+                    if (res.ok) return res.json();
+                }).then((json) => json);
+            } catch (error) {
+                console.log(error);
+            }
+        }
+
+        function App() {
+            this.app = document.querySelector('.App');
+            this.productList = null;
+            this.productDetail = null;
+            this.cart = null;
+            this.pathname = window.location.pathname === '/' ? '/web/' : this.pathname;
+            console.log(this.pathname);
+
+            this.clear = () => {
+                this.app.innerHTML = '';
+            }
+
+            this.setNewPath = (pathname) => {
+                this.pathname = pathname;
+                this.route();
+            }
+
+            //라우팅 처리 (렌더링 메서드 따로 필요없음);
+            this.route = function () {
+                const props = { app: this.app, pathname: this.pathname, route: this.setNewPath };
+                this.clear(); //렌더링 전에 화면 한번 클리어 해주기
+                if (this.pathname === '/web/') { // /web/ => 상품 전체 리스트 조회
+                    this.productList = new ProductList(props);
+                } else if (this.pathname === '/web/cart') { // /web/cart => 장바구니
+                    this.cart = new Cart(props);
+                } else if (this.pathname.includes('/web/products/')) { // web/products/:productId => 상품 상세 페이지
+                    this.productList = new ProductDetail(props);
+                }
+            }
+
+
+        }
+
+        function ProductList(props) {
+            this.setState = async () => {
+                this.state = await request(PRODUCT_LIST);
+            }
+
+            this.target = document.createElement('div');
+            this.target.className = 'ProductListPage';
+            const header = document.createElement('h1');
+            header.innerText = '상품 목록';
+            this.target.appendChild(header);
+            props.app.appendChild(this.target);
+
+            this.onItemClick = () => {
+                const li = Array.from(document.querySelectorAll('li'));
+                li.forEach(v => {
+                    v.addEventListener('click', (e) => {
+                        const id = e.target.dataset.id;
+                        props.route(`/web/products/${id}`);
+                    });
+                });
+            }
+
+            this.render = () => {
+                const ul = document.createElement('ul');
+                ul.style.display = 'flex';
+                ul.style.flexDirection = 'row';
+                ul.style.flexWrap = 'wrap';
+                this.target.appendChild(ul);
+                this.setState().then((v) => {
+                    this.target.innerHTML += `${this.state.map(v => {
+                        return `<li class="Product" data-id=${v.id} style="list-style: none;">
+                    <img src=${v.imageUrl} data-id=${v.id}>
+                    <div class="Product__info">
+                      <div>${v.name}</div>
+                      <div>${v.price.toLocaleString('ko-KR')} 원~</div>
+                    </div>
+                  </li>`;
+                    }).join('')}`
+                }).then((v) => {
+                    this.onItemClick();
+                });
+            }
+
+            this.render();
+        }
+
+        function ProductDetail(props) {
+
+            this.id = props.pathname.split('/')[3];
+            this.target = document.createElement('div');
+            this.target.className = 'ProductDetailPage';
+
+            this.setState = async () => {
+                await request(`${PRODUCT_DETAIL}${this.id}`).then((detail) => {
+                    this.state = detail;
+                    this.target.innerHTML = `<h1>${this.state.name} 상품 정보</h1>`;
+                    props.app.appendChild(this.target);
+                });
+            }
+            this.quantity = 1;
+
+            this.onOptionClick = () => {
+                document.getElementById('options').addEventListener('click', e => {
+                    const selected = Array.from(e.target.childNodes).find(v => v.selected);
+                    const productId = this.id;
+                    const optionId = selected.id;
+                    const optionName = selected.name;
+                    const optionPrice = selected.dataset.price;
+                    const quantity = 1;
+
+                    const selectedList = document.querySelector('.selected');
+                    const li = document.createElement('li');
+                    li.innerHTML = `${optionName} ${quantity}개 번들 ${optionPrice.toLocaleString('ko-KR')}원 
+                <div><input type="number" value=${quantity}>개</div>`;
+                    selectedList.appendChild(li);
+                });
+            }
+
+            this.onOrderClick = () => {
+                document.querySelector('.OrderButton').addEventListener('click', e => {
+                    console.log(this.id, e.target.id, this.quantity);
+                });
+            }
+            this.render = async () => {
+                this.target.innerHTML += `
+              <div class="ProductDetail">
+                <img src=${this.state.imageUrl}>
+                <div class="ProductDetail__info">
+                  <h2>${this.state.name}</h2>
+                  <div class="ProductDetail__price">${this.state.price.toLocaleString('ko-KR')} 원~</div>
+                  <select id='options'>
+                    <option id='xxx'>선택하세요.</option>
+                    ${this.state.productOptions.map((v, i) => {
+                    return `<option 
+                        id=${v.id} name=${v.name} data-price=${v.price}>
+                        ${v.stock === 0 && '(품절) '}
+                        ${v.name}${v.price > 0 ? ` (+${v.price})` : ''}
+                      </option>`
+                }).join('')}
+                  </select>
+                  <div class="ProductDetail__selectedOptions">
+                    <h3>선택된 상품</h3>
+                    <ul class="selected">
+                      <li>
+                        커피잔 100개 번들 10,000원 <div><input type="number" value=${this.quantity}>개</div>
+                      </li>
+                      <li>
+                        커피잔 1000개 번들 15,000원 <div><input type="number" value=${this.quantity}>개</div>
+                      </li>
+                    </ul>
+                    <div class="ProductDetail__totalPrice">175,000원</div>
+                    <button class="OrderButton">주문하기</button>
+                  </div>
+                </div>
+              </div>
+              `;
+
+                this.onOptionClick();
+                this.onOrderClick();
+
+            }
+            this.setState().then((v) => this.render());
+        }
+
+        function Cart(props, orderInfo) {
+            this.target = document.createElement('div');
+            this.target.className = 'CartPage';
+            this.target.innerHTML = `<h1>장바구니</h1>`;
+
+            this.render = () => {
+            }
+
+            this.render();
+        }
+
+        window.onload = () => {
+            const app = new App();
+            app.route();
+        }
+    </script>
+</head>
+
+<body>
+    <main class="App">
+        <!-- <div class="ProductListPage">
+            <h1>상품목록</h1>
+            <ul>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+                <li class="Product">
+                    <img
+                        src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                    <div class="Product__info">
+                        <div>커피잔</div>
+                        <div>10,000원~</div>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div class="ProductDetailPage">
+            <h1>커피잔 상품 정보</h1>
+            <div class="ProductDetail">
+                <img
+                    src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                <div class="ProductDetail__info">
+                    <h2>커피잔</h2>
+                    <div class="ProductDetail__price">10,000원~</div>
+                    <select>
+                        <option>선택하세요.</option>
+                        <option>100개 번들</option>
+                        <option>1000개 번들(+5,000)</option>
+                    </select>
+                    <div class="ProductDetail__selectedOptions">
+                        <h3>선택된 상품</h3>
+                        <ul>
+                            <li>
+                                커피잔 100개 번들 10,000원 <div><input type="number" value="10">개</div>
+                            </li>
+                            <li>
+                                커피잔 1000개 번들 15,000원 <div><input type="number" value="5">개</div>
+                            </li>
+                        </ul>
+                        <div class="ProductDetail__totalPrice">175,000원</div>
+                        <button class="OrderButton">주문하기</button>
+                    </div>
+                </div>
+            </div>
+        </div> -->
+        <div class="CartPage">
+            <h1>장바구니</h1>
+            <div class="Cart">
+                <ul>
+                    <li class="Cart__item">
+                        <img
+                            src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                        <div class="Cart__itemDesription">
+                            <div>커피잔 100개 번들 10,000원 10개</div>
+                            <div>100,000원</div>
+                        </div>
+                    </li>
+                    <li class="Cart__item">
+                        <img
+                            src="https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/assignment_image/cafe_coffee_cup.png">
+                        <div class="Cart__itemDesription">
+                            <div>커피잔 1000개 번들 15,000원 5개</div>
+                            <div>75,000원</div>
+                        </div>
+                    </li>
+                </ul>
+                <div class="Cart__totalPrice">
+                    총 상품가격 175,000원
+                </div>
+                <button class="OrderButton">주문하기</button>
+            </div>
+        </div>
+    </main>
+</body>
+
+</html>
